@@ -1,0 +1,1220 @@
+﻿<meta charset="utf-8">
+<!-- Grimoire - an interactive, long-lived D&D 2024 spellbook.
+     Data persists across sessions via the artifact window.storage API. -->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+  :root{
+    --bg:#15131d; --surface:#1e1b29; --surface2:#262234; --raise:#2e293c;
+    --line:#332c46; --gilt:#c9a227; --gilt-dim:#8a7220;
+    --ink:#ece7f5; --ink-dim:#a79fb8; --ink-faint:#6e6683;
+    --danger:#d8654f;
+    /* school palette — encodes the spell's school, the app's signature system */
+    --abjuration:#5b8def; --conjuration:#e0a340; --divination:#7fd4d4; --enchantment:#e56b9e;
+    --evocation:#e5533c; --illusion:#a97be0; --necromancy:#6fbf73; --transmutation:#9ec24e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(201,162,39,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(169,123,224,.07), transparent 60%),
+      var(--bg);
+    color:var(--ink); font-family:'Inter',system-ui,sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:28px 20px 80px}
+
+  /* ---- Masthead ---- */
+  .masthead{display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
+    padding-bottom:16px; border-bottom:1px solid var(--line); margin-bottom:20px; position:relative}
+  .masthead::after{content:""; position:absolute; left:0; bottom:-1px; width:120px; height:2px;
+    background:linear-gradient(90deg,var(--gilt),transparent)}
+  .brand .eyebrow{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.28em;
+    text-transform:uppercase; color:var(--gilt); margin:0 0 4px}
+  .brand h1{font-family:'Cinzel',serif; font-weight:600; font-size:32px; letter-spacing:.04em;
+    margin:0; color:var(--ink)}
+  .char-wrap{position:relative; display:inline-block}
+  .char-select{display:inline-flex; align-items:baseline; gap:9px; background:none; border:none; cursor:pointer; padding:0; color:var(--ink)}
+  .char-name{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:31px; line-height:1; letter-spacing:.01em}
+  .char-select .caret{font-family:sans-serif; font-size:13px; color:var(--ink-faint)}
+  .char-select:hover .char-name{color:var(--gilt)}
+  .char-select:hover .caret{color:var(--gilt)}
+  .char-menu{position:absolute; top:calc(100% + 10px); left:0; z-index:50; min-width:240px; background:var(--surface2);
+    border:1px solid var(--line); border-radius:12px; padding:6px; box-shadow:0 14px 34px rgba(0,0,0,.5)}
+  .cm-head{font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); padding:6px 10px 4px}
+  .char-item{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; background:none;
+    border:none; cursor:pointer; text-align:left; padding:8px 10px; border-radius:8px; color:var(--ink-dim); font-family:inherit}
+  .char-item:hover{background:var(--raise); color:var(--ink)}
+  .char-item.on{color:var(--ink)}
+  .char-item.on .ci-name::before{content:'✦ '; color:var(--gilt)}
+  .ci-name{font-size:14px}
+  .ci-count{font-family:'Space Mono',monospace; font-size:10px; color:var(--ink-faint)}
+  .cm-sep{height:1px; background:var(--line); margin:6px 4px}
+  .cm-act{display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:7px 10px;
+    border-radius:8px; color:var(--ink-dim); font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.03em}
+  .cm-act:hover{background:var(--raise); color:var(--gilt)}
+  .cm-danger:hover{color:var(--danger)}
+  .modal-narrow{max-width:440px}
+  .count{font-family:'Space Mono',monospace; font-size:12px; color:var(--ink-faint); text-align:right; white-space:nowrap}
+  .count b{color:var(--ink-dim); font-weight:700}
+
+  /* ---- Toolbar ---- */
+  .toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:18px}
+  .search{flex:1 1 240px; position:relative}
+  .search input{width:100%; background:var(--surface); border:1px solid var(--line); color:var(--ink);
+    border-radius:9px; padding:10px 12px 10px 34px; font-size:14px; font-family:inherit}
+  .search svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.5}
+  select, .btn{background:var(--surface); border:1px solid var(--line); color:var(--ink-dim);
+    border-radius:9px; padding:10px 12px; font-size:13px; font-family:inherit; cursor:pointer}
+  select:hover,.btn:hover{border-color:var(--gilt-dim)}
+  input:focus,select:focus,textarea:focus{outline:none; border-color:var(--gilt)}
+  .btn-add{background:linear-gradient(180deg,var(--gilt),var(--gilt-dim)); color:#1a1508;
+    border:none; font-weight:600; letter-spacing:.02em}
+  .btn-add:hover{filter:brightness(1.08)}
+  .toggle-btn{white-space:nowrap; font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.03em}
+  .toggle-btn.on{background:rgba(201,162,39,.16); border-color:var(--gilt); color:var(--gilt); font-weight:700}
+  .prep-count{background:none; border:none; cursor:pointer; font:inherit; color:var(--ink-faint); padding:0;
+    text-decoration:underline; text-decoration-color:rgba(167,159,184,.35); text-underline-offset:2px}
+  .prep-count b{color:var(--ink-dim); font-weight:700}
+  .prep-count:hover{color:var(--ink-dim)}
+  .prep-count.over{color:var(--danger)}
+  .prep-count.over b{color:var(--danger)}
+
+  /* ---- School filter row ---- */
+  .schools{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:22px}
+  .chip{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+    padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:transparent;
+    color:var(--ink-faint); cursor:pointer; transition:.12s}
+  .chip:hover{color:var(--ink-dim); border-color:var(--ink-faint)}
+  .chip.on{color:#12101a; font-weight:700; border-color:transparent}
+
+  /* ---- Spell list ---- */
+  .list{display:grid; gap:11px}
+  .card{display:grid; grid-template-columns:6px 1fr auto; align-items:stretch;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    cursor:pointer; transition:.14s}
+  .card:hover{border-color:var(--gilt-dim); transform:translateY(-1px); background:var(--surface2)}
+  .spine{width:6px}
+  .card-body{padding:13px 15px}
+  .card-name{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:23px; line-height:1.1;
+    margin:0 0 2px; letter-spacing:.01em}
+  .card-name .flags{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.1em;
+    vertical-align:super; margin-left:6px; opacity:.75}
+  .card-meta{font-size:12.5px; color:var(--ink-dim)}
+  .card-meta .sch{font-weight:600}
+  .ind{display:inline-flex; align-items:center; gap:3px; font-family:'Space Mono',monospace; font-size:9px;
+    letter-spacing:.08em; text-transform:uppercase; padding:1px 6px; border-radius:4px; margin-left:6px;
+    vertical-align:middle; border:1px solid; line-height:1.6; white-space:nowrap}
+  .ind-c{color:#8fd6d6; border-color:rgba(143,214,214,.35); background:rgba(143,214,214,.08)}
+  .ind-r{color:var(--gilt); border-color:rgba(201,162,39,.35); background:rgba(201,162,39,.08)}
+  .card-tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:8px}
+  .tag{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.03em; text-transform:uppercase;
+    background:var(--raise); color:var(--ink-dim); border-radius:5px; padding:2px 7px}
+  .card-tags{align-items:center}
+  .card-tags .qtag{display:inline-flex; align-items:center; gap:5px}
+  .qtag-x{background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:12px; line-height:1; padding:0}
+  .qtag-x:hover{color:var(--danger)}
+  .qtag-add{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.03em; text-transform:uppercase;
+    background:none; border:1px dashed var(--line); color:var(--ink-faint); border-radius:5px; padding:2px 8px; cursor:pointer}
+  .qtag-add:hover{border-color:var(--gilt-dim); color:var(--gilt)}
+  .qtag-input{background:var(--surface2); border:1px solid var(--gilt-dim); color:var(--ink); border-radius:5px;
+    padding:2px 8px; font-size:11px; font-family:'Space Mono',monospace; width:118px; text-transform:uppercase}
+  .qtag-input:focus{outline:none; border-color:var(--gilt)}
+  .qtag-suggest{display:none; margin-top:8px; background:var(--surface2); border:1px solid var(--line);
+    border-radius:8px; overflow:hidden; max-width:260px; box-shadow:0 6px 20px rgba(0,0,0,.35)}
+  .qtag-suggest.open{display:block}
+  .qsug-head{font-family:'Space Mono',monospace; font-size:8.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-faint); padding:7px 11px 3px}
+  .qsug-item{font-family:'Space Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--ink-dim); padding:5px 11px; cursor:pointer}
+  .qsug-item:hover, .qsug-item.on{background:var(--raise); color:var(--ink)}
+  .qsug-item mark{background:transparent; color:var(--gilt); font-weight:700}
+  .qsug-new{font-family:'Space Mono',monospace; font-size:10px; color:var(--ink-faint); padding:7px 11px;
+    border-top:1px solid var(--line)}
+  .qsug-new b{color:var(--gilt); font-weight:700}
+  .card-side{display:flex; align-items:center; gap:14px; padding:0 16px}
+  .prep-toggles{display:flex; flex-direction:column; gap:5px}
+  .prep-btn{font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.07em; text-transform:uppercase;
+    border:1px solid var(--line); background:transparent; color:var(--ink-faint); border-radius:6px;
+    padding:3px 0; width:72px; text-align:center; cursor:pointer; transition:.12s}
+  .prep-btn:hover{border-color:var(--gilt-dim); color:var(--ink-dim)}
+  .prep-btn.on{background:var(--gilt); border-color:var(--gilt); color:#1a1508; font-weight:700}
+  .prep-btn.always.on{background:rgba(201,162,39,.16); border-color:var(--gilt); color:var(--gilt); font-weight:700}
+  .lvl-badge{font-family:'Space Mono',monospace; font-size:11px; color:var(--ink-faint); text-align:center; line-height:1.15}
+  .lvl-badge b{display:block; font-size:19px; color:var(--ink); font-weight:700}
+
+  .empty{text-align:center; color:var(--ink-faint); padding:60px 20px; border:1px dashed var(--line); border-radius:12px}
+  .empty p{margin:0 0 4px}
+
+  /* ---- Detail view ---- */
+  .back{display:inline-flex; align-items:center; gap:7px; background:none; border:none; color:var(--ink-dim);
+    font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    cursor:pointer; padding:6px 0; margin-bottom:14px}
+  .back:hover{color:var(--gilt)}
+  .detail{background:var(--surface); border:1px solid var(--line); border-radius:16px; overflow:hidden}
+  .detail-head{padding:26px 30px 20px; border-bottom:1px solid var(--line); position:relative}
+  .detail-head::before{content:""; position:absolute; left:0; top:0; bottom:0; width:5px}
+  .detail-school{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.24em;
+    text-transform:uppercase; margin:0 0 6px}
+  .detail-name{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:44px; line-height:1;
+    margin:0; letter-spacing:.01em}
+  .detail-name .flags{font-family:'Space Mono',monospace; font-size:15px; letter-spacing:.12em;
+    vertical-align:super; margin-left:9px; opacity:.8}
+  .detail-sub{font-size:13.5px; color:var(--ink-dim); margin-top:8px; font-style:italic;
+    font-family:'Cormorant Garamond',serif; font-size:17px}
+
+  .detail-body{padding:24px 30px 28px}
+  table.poe{border-collapse:collapse; width:100%; max-width:420px; margin:0 0 18px}
+  table.poe td{border:1px solid var(--line); padding:6px 10px; font-size:13.5px; vertical-align:top}
+  table.poe td.k{background:var(--surface2); font-family:'Space Mono',monospace; font-weight:700;
+    color:var(--ink-dim); width:52px; text-align:center; letter-spacing:.05em}
+  table.poe td.v{color:var(--ink)}
+  .desc{font-size:15px; color:var(--ink); max-width:620px}
+  .desc p{margin:0 0 10px}
+  .desc p:last-child{margin-bottom:0}
+  .desc strong{color:var(--ink); font-weight:700}
+  .desc em{font-style:italic}
+  .desc code{font-family:'Space Mono',monospace; font-size:.88em; background:var(--surface2); padding:1px 5px; border-radius:4px}
+  .desc .md-h{font-family:'Cormorant Garamond',serif; font-weight:600; color:var(--gilt); margin:16px 0 5px; line-height:1.15}
+  .desc .md-h1{font-size:21px}
+  .desc .md-h2{font-size:19px}
+  .desc .md-h3,.desc .md-h4{font-size:17px}
+  .desc .md-ul{margin:8px 0 10px; padding-left:20px}
+  .desc .md-ul li{margin:3px 0}
+  .desc .md-tw{overflow-x:auto; margin:14px 0; border-radius:8px}
+  .desc .md-table{border-collapse:collapse; width:100%; font-size:12.5px}
+  .desc .md-table th,.desc .md-table td{border:1px solid var(--line); padding:5px 10px; text-align:left; vertical-align:top}
+  .desc .md-table th{background:var(--surface2); font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--ink-dim); font-weight:700; white-space:nowrap}
+  .desc .md-table td{color:var(--ink)}
+  .desc .md-table tbody tr:hover{background:rgba(201,162,39,.05)}
+  .desc-label{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--gilt); margin:0 0 6px}
+  .detail-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:22px; padding-top:18px; border-top:1px solid var(--line)}
+  .detail-actions{display:flex; gap:9px; margin-top:22px}
+  .btn-danger{color:var(--danger); border-color:transparent; background:transparent}
+  .btn-danger:hover{border-color:var(--danger)}
+
+  /* ---- Form modal ---- */
+  .scrim{position:fixed; inset:0; background:rgba(8,7,12,.72); backdrop-filter:blur(3px);
+    display:flex; align-items:flex-start; justify-content:center; padding:36px 16px; overflow:auto; z-index:20}
+  .modal{background:var(--surface); border:1px solid var(--line); border-radius:16px; width:100%;
+    max-width:600px; padding:26px 26px 24px}
+  .modal h2{font-family:'Cinzel',serif; font-weight:600; font-size:20px; letter-spacing:.03em; margin:0 0 18px}
+  .field{margin-bottom:14px}
+  .field label{display:block; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint); margin-bottom:5px}
+  .field input[type=text], .field input[type=number], .field textarea, .field select{width:100%; background:var(--surface2);
+    border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:9px 11px; font-size:14px; font-family:inherit}
+  .field textarea{resize:vertical; min-height:70px; line-height:1.5}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px}
+  .comps{display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:13px; color:var(--ink-dim)}
+  .comps label{display:inline-flex; align-items:center; gap:6px; font-family:inherit; letter-spacing:0;
+    text-transform:none; font-size:13px; margin:0; cursor:pointer}
+  .comps input{accent-color:var(--gilt)}
+  .tagedit{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:2px}
+  .tagedit .tag{cursor:default; display:inline-flex; align-items:center; gap:6px}
+  .tagedit .tag button{background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:13px; padding:0; line-height:1}
+  .tagedit .tag button:hover{color:var(--danger)}
+  .tag-input{background:var(--surface2); border:1px dashed var(--line); color:var(--ink); border-radius:5px;
+    padding:2px 8px; font-size:12px; font-family:'Space Mono',monospace; width:110px}
+  .rows-edit{display:grid; gap:8px}
+  .row-edit{display:grid; grid-template-columns:70px 1fr 30px; gap:8px; align-items:center}
+  .row-edit input{font-size:13px}
+  .row-edit .rm{background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:16px}
+  .row-edit .rm:hover{color:var(--danger)}
+  .add-row{font-family:'Space Mono',monospace; font-size:11px; color:var(--gilt); background:none;
+    border:1px dashed var(--gilt-dim); border-radius:6px; padding:5px 10px; cursor:pointer; margin-top:8px; letter-spacing:.05em}
+  .modal-actions{display:flex; justify-content:space-between; align-items:center; margin-top:22px; padding-top:18px; border-top:1px solid var(--line)}
+  .modal-actions .right{display:flex; gap:9px}
+  .btn-primary{background:linear-gradient(180deg,var(--gilt),var(--gilt-dim)); color:#1a1508; border:none; font-weight:600}
+  .hint{font-size:11px; color:var(--ink-faint); margin-top:4px; font-style:italic}
+
+  .foot{margin-top:34px; text-align:center; font-family:'Space Mono',monospace; font-size:11px;
+    color:var(--ink-faint); letter-spacing:.05em}
+  .foot button{background:none; border:none; color:var(--ink-faint); text-decoration:underline; cursor:pointer; font:inherit}
+  .foot button:hover{color:var(--gilt)}
+  .foot button.warn:hover{color:var(--danger)}
+  .io-note{font-size:12.5px; color:var(--ink-dim); margin:0 0 14px; line-height:1.5}
+  .io-text{width:100%; min-height:150px; max-height:300px; background:var(--surface2); border:1px solid var(--line);
+    color:var(--ink); border-radius:8px; padding:10px 12px; font-family:'Space Mono',monospace; font-size:11px;
+    line-height:1.5; resize:vertical; box-sizing:border-box}
+  .io-text:focus{outline:none; border-color:var(--gilt)}
+  .io-file{display:block; margin-bottom:12px; font-size:12px; color:var(--ink-dim); font-family:inherit}
+  .io-file::file-selector-button{background:var(--surface2); border:1px solid var(--line); color:var(--ink-dim);
+    border-radius:7px; padding:7px 11px; font-family:'Space Mono',monospace; font-size:11px; cursor:pointer; margin-right:10px}
+  .io-file::file-selector-button:hover{border-color:var(--gilt-dim); color:var(--gilt)}
+  .save-ok{color:var(--ink-faint)}
+  .save-warn{color:var(--danger); text-transform:none; letter-spacing:0}
+  .warn-banner{background:rgba(216,101,79,.12); border:1px solid rgba(216,101,79,.42); color:#f0b6a8;
+    border-radius:10px; padding:11px 14px; font-size:12.5px; line-height:1.55; margin-bottom:16px}
+  .warn-banner b{color:#f6ccc1}
+  .warn-banner button{background:none; border:none; color:#f6ccc1; text-decoration:underline; cursor:pointer; font:inherit; padding:0}
+  .dirty-chip{display:inline-block; margin-left:8px; font-family:'Space Mono',monospace; font-size:9px;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--gilt); border:1px solid rgba(201,162,39,.45);
+    background:rgba(201,162,39,.1); border-radius:999px; padding:2px 8px; vertical-align:middle}
+  .foot button.dirty{color:var(--gilt); font-weight:700}
+  .foot .dot{color:var(--gilt); animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){ .foot .dot{animation:none; opacity:1} }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:760px){
+    .wrap{padding:22px 16px 64px}
+    .detail-head{padding:22px 22px 18px}
+    .detail-body{padding:20px 22px 24px}
+    .char-menu{max-width:calc(100vw - 32px)}
+  }
+  @media (max-width:560px){
+    .grid2,.grid3{grid-template-columns:1fr}
+    .wrap{padding:18px 13px 56px}
+    /* masthead stacks so the character name and counts never collide */
+    .masthead{flex-direction:column; align-items:flex-start; gap:10px}
+    .count{text-align:left; white-space:normal}
+    .brand h1{font-size:26px}
+    .char-name{font-size:25px}
+    /* toolbar: search on its own row, filters flow, add button full width */
+    .search{flex-basis:100%}
+    .toolbar select, .toolbar .toggle-btn{flex:1 1 auto}
+    .btn-add{flex-basis:100%; text-align:center}
+    /* cards: drop the redundant level badge (level is already in the meta line), tighten toggles */
+    .card-body{padding:12px 13px}
+    .card-name{font-size:21px}
+    .lvl-badge{display:none}
+    .card-side{gap:0; padding:0 12px}
+    .prep-btn{width:66px; font-size:8.5px}
+    /* detail + modals */
+    .detail-name{font-size:32px}
+    .detail-head{padding:20px 18px 16px}
+    .detail-body{padding:18px 18px 22px}
+    .scrim{padding:16px 10px}
+    .modal{padding:20px 18px}
+    table.poe{max-width:none}
+  }
+  @media (max-width:380px){
+    .prep-btn{width:60px; letter-spacing:.03em}
+    .char-name{font-size:22px}
+    .schools{gap:6px}
+    .chip{padding:5px 9px}
+  }
+</style>
+
+<div class="wrap" id="app"><div class="empty"><p>Opening the grimoire…</p></div></div>
+
+<script>
+// Ensure correct mobile scaling whether opened standalone or in a viewer.
+(function(){ try{
+  if(!document.querySelector('meta[name="viewport"]')){
+    const m=document.createElement('meta');
+    m.name='viewport'; m.content='width=device-width, initial-scale=1, viewport-fit=cover';
+    document.head.appendChild(m);
+  }
+}catch(_){}})();
+const SCHOOLS = ["Abjuration","Conjuration","Divination","Enchantment","Evocation","Illusion","Necromancy","Transmutation"];
+const SCHOOL_VAR = s => `var(--${s.toLowerCase()})`;
+const KEY = 'grimoire:spellbook';      // legacy single-book key (migration source)
+const LKEY = 'grimoire:library';       // multi-character library
+const VKEY = 'grimoire:seedversion';
+const EKEY = 'grimoire:exporthash';
+const SEED_VERSION = 2;
+const ROW_KEYS = ["TG","AE","MC","LV","DM","SV","HP","EF"]; // optional Poe rows, in canonical order
+
+let state = { spells:[], library:{version:1, activeId:null, characters:[]}, charMenuOpen:false,
+  view:'list', currentId:null, editing:null, quickTagId:null, listScroll:0, restoreScroll:false,
+  filter:{ q:'', school:'', level:'', tag:'', prep:'', ritual:false, cast:'', sort:'level' }, ready:false };
+let sugState = { items:[], idx:-1 };
+
+/* ---------- storage adapter ----------
+   Tries, in order: Claude's artifact storage (window.storage) → the browser's
+   localStorage → in-memory. A round-trip self-test decides which actually works,
+   so persistence status can be shown honestly instead of failing silently. */
+let STORE_MODE='memory';   // 'claude' | 'local' | 'memory'
+let PERSISTENT=false;      // true only if writes survive across sessions
+const MEM={};
+const hasWinStore = (typeof window!=='undefined' && window.storage
+  && typeof window.storage.get==='function' && typeof window.storage.set==='function');
+function lsOK(){ try{ const k='grimoire:__t'; window.localStorage.setItem(k,'1'); window.localStorage.removeItem(k); return true; }catch(_){ return false; } }
+const Store = {
+  async get(key){
+    if(STORE_MODE==='claude'){ try{ const r=await window.storage.get(key); return (r && 'value' in r) ? r.value : null; }catch(_){ return null; } }
+    if(STORE_MODE==='local'){ try{ return window.localStorage.getItem(key); }catch(_){ return null; } }
+    return (key in MEM) ? MEM[key] : null;
+  },
+  async set(key,value){
+    if(STORE_MODE==='claude'){ try{ await window.storage.set(key,value); return true; }catch(_){ return false; } }
+    if(STORE_MODE==='local'){ try{ window.localStorage.setItem(key,value); return true; }catch(_){ return false; } }
+    MEM[key]=value; return true;
+  }
+};
+async function roundTrip(){
+  try{ const t='grimoire:__selftest', stamp='ok'+Date.now(); const w=await Store.set(t,stamp); const b=await Store.get(t); return !!w && b===stamp; }
+  catch(_){ return false; }
+}
+async function initStore(){
+  STORE_MODE = hasWinStore ? 'claude' : (lsOK() ? 'local' : 'memory');
+  let ok = await roundTrip();
+  if(!ok && STORE_MODE==='claude'){                    // API present but not functional — fall back
+    STORE_MODE = lsOK() ? 'local' : 'memory';
+    ok = await roundTrip();
+  }
+  // memory works within a session but never survives a reload, so it is not "persistent"
+  PERSISTENT = ok && STORE_MODE!=='memory';
+}
+function persistInfo(){
+  if(PERSISTENT && STORE_MODE==='claude') return { ok:true, label:'Saved to Claude storage' };
+  if(PERSISTENT && STORE_MODE==='local')  return { ok:true, label:'Saved to this browser' };
+  return { ok:false, label:'Not saving between sessions' };
+}
+
+/* ---------- persistence ---------- */
+function seed(){
+  return [
+    { id: uid(), name:"Light", level:0, school:"Evocation",
+      ct:"Action", rn:"Touch", du:"1 Hr", concentration:false, ritual:false,
+      comps:{v:true,s:false,m:true,cost:""}, material:"a firefly or phosphorescent moss",
+      rows:[ {k:"TG",v:"1 Large or smaller object, unworn"}, {k:"EF",v:"20 Ft / 20 Ft Bright/Dim Light"} ],
+      desc:"Opaque covering blocks the light. Color as you like. Recasting the spell ends it.",
+      tags:["Utility","Light Source"] },
+    { id: uid(), name:"Mage Hand", level:0, school:"Conjuration",
+      ct:"Action", rn:"30 Ft", du:"1 Min", concentration:false, ritual:false,
+      comps:{v:true,s:true,m:false,cost:""}, material:"",
+      rows:[ {k:"EF",v:"Spectral hand; manipulate, open, stow, pour"} ],
+      desc:"Use Magic Action to control and move the hand up to 30 Ft. Can't attack, use magic items, or carry >10 lb.",
+      tags:["Utility"] },
+    { id: uid(), name:"Augury", level:2, school:"Divination",
+      ct:"1 Min", rn:"Self", du:"Instant", concentration:false, ritual:true,
+      comps:{v:true,s:true,m:true,cost:"*"}, material:"specially marked tokens worth 25+ GP",
+      rows:[ {k:"MC",v:"Divinatory tokens 25 GP+"}, {k:"EF",v:"Omen: Weal / Woe / Both / Nothing"} ],
+      desc:"Omen covers a plan you'll act on within 30 Min; ignores later circumstances. Each recast before a Long Rest: +25% cumulative chance of no answer.",
+      tags:["Divination"] },
+    { id: uid(), name:"Comprehend Languages", level:1, school:"Divination",
+      ct:"Action", rn:"Self", du:"1 Hr", concentration:false, ritual:true,
+      comps:{v:true,s:true,m:true,cost:""}, material:"a pinch of soot and salt",
+      rows:[ {k:"EF",v:"Understand any language heard, signed, or seen"} ],
+      desc:"Touch the surface to read written text (~1 Min/page). Doesn't decode ciphers or secret messages.",
+      tags:["Utility"] },
+    { id: uid(), name:"Detect Magic", level:1, school:"Divination",
+      ct:"Action", rn:"Self", du:"10 Min", concentration:true, ritual:true,
+      comps:{v:true,s:true,m:false,cost:""}, material:"",
+      rows:[ {k:"EF",v:"Sense magic within 30 Ft"} ],
+      desc:"Magic Action to see auras and learn each effect's school. Blocked by 1 Ft stone/dirt/wood, 1 In metal, or thin lead.",
+      tags:["Utility"] },
+  ];
+}
+async function load(){
+  await initStore();
+  lastExportHash = await Store.get(EKEY);
+  state.library = await buildLibrary();
+  if(!state.library.activeId || !state.library.characters.some(c=>c.id===state.library.activeId)){
+    state.library.activeId = state.library.characters[0].id;
+  }
+  bindActive();
+  await persist();
+  window.addEventListener('beforeunload', (e)=>{
+    if(!PERSISTENT && isDirty()){ e.preventDefault(); e.returnValue=''; }
+  });
+  document.addEventListener('click', globalClose);
+  state.ready = true;
+  if(!activeChar().name){ render(); openNameModal('first'); }
+  else render();
+}
+// Load library, or migrate a legacy single spellbook, or start fresh.
+async function buildLibrary(){
+  const libRaw = await Store.get(LKEY);
+  let lib=null; try{ lib = JSON.parse(libRaw); }catch(_){ lib=null; }
+  if(lib && Array.isArray(lib.characters) && lib.characters.length){
+    lib.characters = lib.characters.map(normalizeCharacter);
+    lib.version = 1;
+    return lib;
+  }
+  // legacy single book?
+  const legacyRaw = await Store.get(KEY);
+  let legacy=null; try{ legacy = JSON.parse(legacyRaw); }catch(_){ legacy=null; }
+  if(Array.isArray(legacy) && legacy.length){
+    return { version:1, activeId:null, characters:[ { id:uid(), name:null, spells: legacy.map(normalizeSpell) } ] };
+  }
+  // brand new
+  return { version:1, activeId:null, characters:[ { id:uid(), name:null, spells: seed() } ] };
+}
+function activeChar(){
+  return state.library.characters.find(c=>c.id===state.library.activeId) || state.library.characters[0];
+}
+function bindActive(){ state.spells = activeChar().spells; }   // point working array at active character
+function syncActive(){ const ac=activeChar(); if(ac) ac.spells = state.spells; }
+async function persist(){ syncActive(); await Store.set(LKEY, JSON.stringify(state.library)); }
+
+/* ---------- character operations ---------- */
+async function switchCharacter(id){
+  if(!state.library.characters.some(c=>c.id===id)) return;
+  syncActive();
+  state.library.activeId = id;
+  bindActive();
+  state.charMenuOpen=false; state.view='list'; state.currentId=null; state.quickTagId=null;
+  state.filter={q:'',school:'',level:'',tag:'',prep:'',ritual:false,cast:'',sort:'level'};
+  await persist(); render();
+}
+async function addCharacter(name){
+  const ch={ id:uid(), name:name||null, spells:[] };
+  syncActive();
+  state.library.characters.push(ch);
+  state.library.activeId = ch.id;
+  bindActive();
+  state.charMenuOpen=false; state.view='list'; state.currentId=null;
+  state.filter={q:'',school:'',level:'',tag:'',prep:'',ritual:false,cast:'',sort:'level'};
+  await persist(); render();
+}
+async function renameActive(name){
+  const ac=activeChar(); if(!ac) return;
+  ac.name = name || ac.name || 'Unnamed';
+  await persist(); render();
+}
+async function duplicateActive(){
+  const ac=activeChar(); if(!ac) return;
+  const copy={ id:uid(), name:(ac.name||'Character')+' (copy)', preparedCap:(Number.isFinite(ac.preparedCap)?ac.preparedCap:null), spells: JSON.parse(JSON.stringify(ac.spells)).map(s=>({...s, id:uid()})) };
+  syncActive();
+  state.library.characters.push(copy);
+  state.library.activeId = copy.id;
+  bindActive();
+  state.charMenuOpen=false;
+  await persist(); render();
+}
+async function deleteActive(){
+  if(state.library.characters.length<=1){ alert('You need at least one character. Rename this one or duplicate it before deleting.'); return; }
+  const ac=activeChar();
+  if(!confirm(`Delete character “${ac.name||'Unnamed'}” and its ${ac.spells.length} spell(s)? This can't be undone.`)) return;
+  state.library.characters = state.library.characters.filter(c=>c.id!==ac.id);
+  state.library.activeId = state.library.characters[0].id;
+  bindActive();
+  state.charMenuOpen=false; state.view='list'; state.currentId=null;
+  state.filter={q:'',school:'',level:'',tag:'',prep:'',ritual:false,cast:'',sort:'level'};
+  await persist(); render();
+}
+
+/* ---------- unexported-change tracking (whole library) ---------- */
+let lastExportHash = null;
+function hashStr(s){ let h=5381; for(let i=0;i<s.length;i++){ h=((h<<5)+h)+s.charCodeAt(i); h|=0; } return String(h>>>0); }
+function libContent(){ syncActive(); return JSON.stringify(state.library.characters.map(c=>({name:c.name, spells:c.spells}))); }
+function sbHash(){ return hashStr(libContent()); }          // hashes roster content, not active selection
+function isDirty(){
+  const anySpells = state.library.characters.some(c=>c.spells && c.spells.length);
+  return lastExportHash===null ? anySpells : (sbHash()!==lastExportHash);
+}
+async function markExported(){ lastExportHash = sbHash(); await Store.set(EKEY, lastExportHash); if(state.view==='list') render(); }
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 's'+Date.now()+Math.random().toString(16).slice(2)); }
+
+/* ---------- helpers ---------- */
+const esc = s => (s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Minimal, safe Markdown → HTML for spell notes: tables, ## headings, - lists, **bold**, *italic*, `code`.
+// Input is HTML-escaped first, so only known-safe tags are ever emitted.
+function mdInline(s){
+  return s
+    .replace(/\*\*([^*]+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*([^*\n]+?)\*/g,'<em>$1</em>')
+    .replace(/(^|[^\w])_([^_\n]+?)_(?=[^\w]|$)/g,'$1<em>$2</em>')
+    .replace(/`([^`]+?)`/g,'<code>$1</code>');
+}
+function mdToHtml(src){
+  if(!src) return '';
+  const lines = String(src).replace(/\r\n?/g,'\n').split('\n');
+  const isDelim = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l);
+  const isTableStart = idx => lines[idx].includes('|') && idx+1<lines.length && isDelim(lines[idx+1]);
+  const splitRow = l => l.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());
+  const out=[]; let i=0;
+  while(i<lines.length){
+    const line=lines[i];
+    if(/^\s*$/.test(line)){ i++; continue; }
+    if(isTableStart(i)){
+      const header=splitRow(line); i+=2; const rows=[];
+      while(i<lines.length && lines[i].includes('|') && !/^\s*$/.test(lines[i])){ rows.push(splitRow(lines[i])); i++; }
+      let t='<div class="md-tw"><table class="md-table"><thead><tr>'
+        + header.map(h=>`<th>${mdInline(esc(h))}</th>`).join('') + '</tr></thead><tbody>';
+      t += rows.map(r=>'<tr>'+header.map((_,ci)=>`<td>${mdInline(esc(r[ci]||''))}</td>`).join('')+'</tr>').join('');
+      out.push(t+'</tbody></table></div>');
+      continue;
+    }
+    const hm=line.match(/^(#{1,4})\s+(.*)$/);
+    if(hm){ out.push(`<p class="md-h md-h${hm[1].length}">${mdInline(esc(hm[2].trim()))}</p>`); i++; continue; }
+    if(/^\s*[-*]\s+/.test(line)){
+      const items=[];
+      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(lines[i].replace(/^\s*[-*]\s+/,'')); i++; }
+      out.push('<ul class="md-ul">'+items.map(it=>`<li>${mdInline(esc(it))}</li>`).join('')+'</ul>');
+      continue;
+    }
+    const para=[];
+    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !isTableStart(i)){
+      para.push(lines[i]); i++;
+    }
+    out.push(`<p>${mdInline(esc(para.join(' ')))}</p>`);
+  }
+  return out.join('');
+}
+const lvlLabel = n => n===0 ? 'Cantrip' : 'Level '+n;
+// Classify the free-text casting time into a category for filtering.
+function ctCategory(ct){
+  const t=(ct||'').toLowerCase();
+  if(t.includes('bonus')) return 'bonus';
+  if(t.includes('reaction')) return 'reaction';
+  if(t.includes('action')) return 'action';
+  return 'other';
+}
+function flagStr(sp){
+  let f='';
+  if(sp.comps.v) f+='V';
+  if(sp.comps.s) f+='S';
+  if(sp.comps.m) f+='M'+(sp.comps.cost||'');
+  return f;
+}
+function allTags(){ return [...new Set(state.spells.flatMap(s=>s.tags||[]))].sort(); }
+function buildRows(sp){
+  const rows=[];
+  rows.push(["CT", sp.ct + (sp.ritual?' ®':'')]);
+  rows.push(["RN", sp.rn]);
+  rows.push(["DU", sp.du + (sp.concentration?' ©':'')]);
+  (sp.rows||[]).forEach(r=>{ if(r.k && r.v) rows.push([r.k.toUpperCase(), r.v]); });
+  return rows;
+}
+
+/* ---------- filtering ---------- */
+function visibleSpells(){
+  const f=state.filter, q=f.q.trim().toLowerCase();
+  let out = state.spells.filter(s=>{
+    if(f.school && s.school!==f.school) return false;
+    if(f.level!=='' && String(s.level)!==String(f.level)) return false;
+    if(f.tag && !(s.tags||[]).includes(f.tag)) return false;
+    if(f.prep==='prepared' && !(s.prepared||s.alwaysPrepared)) return false;
+    if(f.prep==='always' && !s.alwaysPrepared) return false;
+    if(f.prep==='unprepared' && (s.prepared||s.alwaysPrepared)) return false;
+    if(f.ritual && !s.ritual) return false;
+    if(f.cast && ctCategory(s.ct)!==f.cast) return false;
+    if(q){
+      const hay=(s.name+' '+s.desc+' '+(s.tags||[]).join(' ')+' '+s.school).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const by=f.sort;
+  out.sort((a,b)=> by==='name' ? a.name.localeCompare(b.name)
+    : by==='school' ? a.school.localeCompare(b.school)||a.level-b.level
+    : (a.level-b.level)||a.name.localeCompare(b.name));
+  return out;
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const app=document.getElementById('app');
+  if(!state.ready){ return; }
+  if(state.view==='detail') return renderDetail(app);
+  renderList(app);
+  if(state.editing) renderForm();
+}
+
+function renderList(app){
+  const f=state.filter;
+  const schoolChips = SCHOOLS.map(s=>{
+    const on=f.school===s;
+    return `<button class="chip ${on?'on':''}" style="${on?`background:${SCHOOL_VAR(s)}`:''}" data-school="${s}">${s}</button>`;
+  }).join('');
+  const tagOpts = ['<option value="">All tags</option>'].concat(allTags().map(t=>`<option ${f.tag===t?'selected':''}>${esc(t)}</option>`)).join('');
+  const levelOpts = ['<option value="">All levels</option>','<option value="0">Cantrip</option>']
+    .concat([1,2,3,4,5,6,7,8,9].map(n=>`<option value="${n}">Level ${n}</option>`)).join('');
+
+  const cards = listBodyHTML();
+  const pinfo = persistInfo();
+  const dirty = isDirty();
+  const prepCount = state.spells.filter(s=>s.prepared).length;         // prepared only, all spells, ignores filters
+  const cap = Number.isFinite(activeChar().preparedCap) ? activeChar().preparedCap : null;
+  const over = cap!=null && prepCount>cap;
+  const prepSeg = ` · <button class="prep-count${over?' over':''}" id="prep-cap" title="Set prepared limit"><b>${prepCount}</b>${cap!=null?` / ${cap}`:''} prepared${over?' — over limit ⚠':''}</button>`;
+  const warnBanner = !pinfo.ok ? `
+    <div class="warn-banner">⚠ <b>Not saving in this view.</b> Spells you add here will disappear when you reload, because this environment doesn't allow persistent storage. To save between sessions, <b>download this file and open it directly in your browser</b>. Either way, use <button id="banner-export">export</button> to keep a backup now.
+    </div>` : '';
+
+  app.innerHTML = `
+    <div class="masthead">
+      <div class="brand">
+        <p class="eyebrow">Grimoire · D&amp;D 2024</p>
+        <div class="char-wrap">
+          <button class="char-select" id="char-select" title="Switch or manage characters">
+            <span class="char-name">${esc(activeChar().name||'Unnamed')}</span>
+            <span class="caret">▾</span>
+          </button>
+          ${state.charMenuOpen ? charMenuHTML() : ''}
+        </div>
+      </div>
+      <div class="count"><b>${state.spells.length}</b> spell${state.spells.length===1?'':'s'}${prepSeg}${dirty?'<span class="dirty-chip" title="You have changes that aren\'t in a backup file yet">unexported</span>':''}</div>
+    </div>
+    ${warnBanner}
+    <div class="toolbar">
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="q" type="text" placeholder="Search spells, tags…" value="${esc(f.q)}">
+      </div>
+      <select id="sel-prep">
+        <option value="">All spells</option>
+        <option value="prepared">Prepared</option>
+        <option value="always">Always prepared</option>
+        <option value="unprepared">Unprepared</option>
+      </select>
+      <button class="btn toggle-btn ${f.ritual?'on':''}" id="toggle-ritual" title="Show only ritual spells">® Ritual</button>
+      <select id="sel-cast">
+        <option value="">Any cast time</option>
+        <option value="action">Action</option>
+        <option value="bonus">Bonus action</option>
+        <option value="reaction">Reaction</option>
+        <option value="other">Something else</option>
+      </select>
+      <select id="sel-level">${levelOpts}</select>
+      <select id="sel-tag">${tagOpts}</select>
+      <select id="sel-sort">
+        <option value="level" ${f.sort==='level'?'selected':''}>Sort: Level</option>
+        <option value="name" ${f.sort==='name'?'selected':''}>Sort: Name</option>
+        <option value="school" ${f.sort==='school'?'selected':''}>Sort: School</option>
+      </select>
+      <button class="btn btn-add" id="add">✦ Add spell</button>
+    </div>
+    <div class="schools">${schoolChips}</div>
+    <div class="list">${cards}</div>
+    <div class="foot"><span class="${pinfo.ok?'save-ok':'save-warn'}">${pinfo.ok?'✓ ':'⚠ '}${pinfo.label}</span> · <button id="export" class="${dirty?'dirty':''}">export${dirty?' <span class="dot">•</span>':''}</button> · <button id="import">import</button> · <button id="reset" class="warn">restore starters</button></div>
+  `;
+
+  // wire up
+  document.getElementById('q').oninput = e=>{ state.filter.q=e.target.value; state.quickTagId=null; const l=document.querySelector('.list'); l.innerHTML = listBodyHTML(); wireCards(); };
+  document.getElementById('sel-level').value=f.level; document.getElementById('sel-level').onchange=e=>{state.filter.level=e.target.value; renderList(app);};
+  document.getElementById('sel-prep').value=f.prep; document.getElementById('sel-prep').onchange=e=>{state.filter.prep=e.target.value; renderList(app);};
+  document.getElementById('toggle-ritual').onclick=()=>{ state.filter.ritual=!state.filter.ritual; renderList(app); };
+  document.getElementById('sel-cast').value=f.cast; document.getElementById('sel-cast').onchange=e=>{state.filter.cast=e.target.value; renderList(app);};
+  const pcap=document.getElementById('prep-cap'); if(pcap) pcap.onclick=()=>openCapModal();
+  document.getElementById('sel-tag').onchange=e=>{state.filter.tag=e.target.value; renderList(app);};
+  document.getElementById('sel-sort').onchange=e=>{state.filter.sort=e.target.value; renderList(app);};
+  document.getElementById('add').onclick=()=>openForm();
+  document.getElementById('export').onclick=openExport;
+  const bx=document.getElementById('banner-export'); if(bx) bx.onclick=openExport;
+  document.getElementById('import').onclick=openImport;
+  document.getElementById('reset').onclick=async()=>{ if(confirm(`Load the 5 starter spells into “${activeChar().name||'this character'}”? This replaces this character's current spells.`)){ state.spells=seed(); await persist(); state.filter={q:'',school:'',level:'',tag:'',prep:'',ritual:false,cast:'',sort:'level'}; renderList(app);} };
+  wireCharMenu(app);
+  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ const s=c.dataset.school; state.filter.school = state.filter.school===s?'':s; renderList(app); });
+  wireCards();
+  if(state.quickTagId){ const qi=document.querySelector('.qtag-input'); if(qi){ qi.focus(); } }
+  if(state.restoreScroll){ const y=state.listScroll; state.restoreScroll=false; requestAnimationFrame(()=>window.scrollTo(0,y)); }
+}
+function listBodyHTML(){
+  const spells=visibleSpells();
+  return spells.length ? spells.map(cardHTML).join('')
+    : `<div class="empty"><p>No spells match.</p><p style="font-size:12px">Adjust the filters, or inscribe a new one.</p></div>`;
+}
+function cardHTML(sp){
+  const c=SCHOOL_VAR(sp.school);
+  const flags=flagStr(sp);
+  const tagChips=(sp.tags||[]).map(t=>
+    `<span class="tag qtag">${esc(t)}<button class="qtag-x" data-rmtag="${sp.id}" data-tag="${esc(t)}" title="Remove tag">×</button></span>`
+  ).join('');
+  const adder = state.quickTagId===sp.id
+    ? `<input class="qtag-input" data-qtag="${sp.id}" placeholder="tag name ⏎" autocomplete="off" spellcheck="false">`
+    : `<button class="qtag-add" data-addtag="${sp.id}" title="Add a tag">+ tag</button>`;
+  const suggest = state.quickTagId===sp.id ? `<div class="qtag-suggest"></div>` : '';
+  return `
+    <div class="card" data-id="${sp.id}">
+      <div class="spine" style="background:${c}"></div>
+      <div class="card-body">
+        <p class="card-name">${esc(sp.name)}${flags?`<span class="flags">${flags}</span>`:''}</p>
+        <div class="card-meta"><span class="sch" style="color:${c}">${sp.school}</span> · ${lvlLabel(sp.level)} · ${esc(sp.ct)}${sp.concentration?`<span class="ind ind-c" title="Concentration">© Conc</span>`:''}${sp.ritual?`<span class="ind ind-r" title="Ritual">® Ritual</span>`:''}</div>
+        <div class="card-tags">${tagChips}${adder}</div>
+        ${suggest}
+      </div>
+      <div class="card-side">
+        <div class="prep-toggles">
+          <button class="prep-btn ${sp.prepared?'on':''}" data-prep="${sp.id}" title="Toggle prepared">Prepared</button>
+          <button class="prep-btn always ${sp.alwaysPrepared?'on':''}" data-always="${sp.id}" title="Toggle always prepared">Always</button>
+        </div>
+        <div class="lvl-badge">${sp.level===0?'<b>C</b>cantrip':`<b>${sp.level}</b>level`}</div>
+      </div>
+    </div>`;
+}
+function wireCards(){
+  document.querySelectorAll('.card').forEach(c=>{
+    c.onclick=()=>{ state.listScroll = window.scrollY || window.pageYOffset || 0; state.currentId=c.dataset.id; state.view='detail'; render(); };
+  });
+  document.querySelectorAll('.qtag-add').forEach(b=>b.onclick=e=>{
+    e.stopPropagation(); state.quickTagId=b.dataset.addtag; render();
+  });
+  document.querySelectorAll('[data-prep]').forEach(b=>b.onclick=async e=>{
+    e.stopPropagation();
+    const sp=state.spells.find(s=>s.id===b.dataset.prep); if(!sp) return;
+    sp.prepared=!sp.prepared; await persist(); render();
+  });
+  document.querySelectorAll('[data-always]').forEach(b=>b.onclick=async e=>{
+    e.stopPropagation();
+    const sp=state.spells.find(s=>s.id===b.dataset.always); if(!sp) return;
+    sp.alwaysPrepared=!sp.alwaysPrepared; await persist(); render();
+  });
+  document.querySelectorAll('.qtag-x').forEach(b=>b.onclick=async e=>{
+    e.stopPropagation();
+    const sp=state.spells.find(s=>s.id===b.dataset.rmtag); if(!sp) return;
+    sp.tags=(sp.tags||[]).filter(t=>t!==b.dataset.tag);
+    await persist(); render();
+  });
+  const qin=document.querySelector('.qtag-input');
+  if(qin){
+    const spId=qin.dataset.qtag;
+    sugState={items:[],idx:-1};
+    qin.onclick=e=>e.stopPropagation();
+    qin.oninput=()=>{ sugState.idx=-1; renderSuggest(spId); };
+    qin.onkeydown=async e=>{
+      e.stopPropagation();
+      const n=sugState.items.length;
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(n){ sugState.idx=(sugState.idx+1)%n; renderSuggest(spId,true); } }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); if(n){ sugState.idx=(sugState.idx<=0?n-1:sugState.idx-1); renderSuggest(spId,true); } }
+      else if(e.key==='Enter'){ e.preventDefault(); qin.onblur=null;
+        const pick=(sugState.idx>=0 && sugState.items[sugState.idx]) ? sugState.items[sugState.idx] : qin.value;
+        await addQuickTag(spId, pick);
+      }
+      else if(e.key==='Escape'){
+        const box=document.querySelector('.qtag-suggest');
+        if(box && box.classList.contains('open')){ box.className='qtag-suggest'; box.innerHTML=''; sugState={items:[],idx:-1}; }
+        else { qin.onblur=null; state.quickTagId=null; render(); }
+      }
+    };
+    qin.onblur=async ()=>{ await addQuickTag(spId, qin.value); };
+    renderSuggest(spId);
+  }
+}
+function highlightMatch(tag, q){
+  if(!q) return esc(tag);
+  const i=tag.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0) return esc(tag);
+  return esc(tag.slice(0,i))+'<mark>'+esc(tag.slice(i,i+q.length))+'</mark>'+esc(tag.slice(i+q.length));
+}
+function renderSuggest(spId, keepFocus){
+  const box=document.querySelector('.qtag-suggest');
+  const inp=document.querySelector('.qtag-input');
+  if(!box || !inp) return;
+  const typed=inp.value, q=typed.trim(), ql=q.toLowerCase();
+  const sp=state.spells.find(s=>s.id===spId);
+  const own=new Set((sp?.tags||[]).map(t=>t.toLowerCase()));
+  let items=allTags().filter(t=>!own.has(t.toLowerCase()));
+  if(q){
+    items=items.filter(t=>t.toLowerCase().includes(ql))
+      .sort((a,b)=>((a.toLowerCase().startsWith(ql)?0:1)-(b.toLowerCase().startsWith(ql)?0:1))||a.localeCompare(b));
+  }
+  items=items.slice(0,6);
+  sugState.items=items;
+  if(sugState.idx>=items.length) sugState.idx=items.length-1;
+  const exact = q && allTags().some(t=>t.toLowerCase()===ql);
+  const rows=items.map((t,i)=>`<div class="qsug-item${i===sugState.idx?' on':''}" data-sug="${esc(t)}">${highlightMatch(t,q)}</div>`).join('');
+  const newHint = (q && !exact) ? `<div class="qsug-new">⏎ to create <b>${esc(q)}</b></div>` : '';
+  if(!rows && !newHint){ box.className='qtag-suggest'; box.innerHTML=''; return; }
+  box.className='qtag-suggest open';
+  box.innerHTML=(items.length?`<div class="qsug-head">Existing tags</div>`:'')+rows+newHint;
+  box.querySelectorAll('.qsug-item').forEach(el=>{
+    el.onmousedown=e=>{ e.preventDefault(); addQuickTag(spId, el.dataset.sug); };
+  });
+  if(keepFocus) inp.focus();
+}
+async function addQuickTag(id, val){
+  const sp=state.spells.find(s=>s.id===id);
+  const t=(val||'').trim();
+  if(sp && t){ sp.tags=[...new Set([...(sp.tags||[]), t])]; await persist(); }
+  state.quickTagId=null; render();
+}
+
+function renderDetail(app){
+  const sp=state.spells.find(s=>s.id===state.currentId);
+  if(!sp){ state.view='list'; return render(); }
+  const c=SCHOOL_VAR(sp.school), flags=flagStr(sp);
+  const rows=buildRows(sp).map(([k,v])=>`<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}</td></tr>`).join('');
+  const tags=(sp.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('') || '<span style="color:var(--ink-faint);font-size:12px">no tags</span>';
+  const compLine = [sp.comps.v?'V':'', sp.comps.s?'S':'', sp.comps.m?'M':''].filter(Boolean).join(', ')
+    + (sp.comps.m && sp.material ? ` (${sp.material})` : '');
+  app.innerHTML = `
+    <button class="back" id="back">← Back to grimoire</button>
+    <div class="detail">
+      <div class="detail-head" style="--sc:${c}">
+        <p class="detail-school" style="color:${c}">${sp.school} · ${lvlLabel(sp.level)}</p>
+        <h2 class="detail-name">${esc(sp.name)}${flags?`<span class="flags">${flags}</span>`:''}</h2>
+        <div class="detail-sub">${esc(compLine)}${sp.concentration?' · Concentration':''}${sp.ritual?' · Ritual':''}</div>
+      </div>
+      <div class="detail-body">
+        <table class="poe">${rows}</table>
+        ${sp.desc?`<p class="desc-label">Notes</p><div class="desc">${mdToHtml(sp.desc)}</div>`:''}
+        <div class="detail-tags">${tags}</div>
+        <div class="detail-actions">
+          <button class="btn" id="edit">Edit</button>
+          <button class="btn btn-danger" id="del">Remove from grimoire</button>
+        </div>
+      </div>
+    </div>`;
+  document.querySelector('.detail-head').style.setProperty('--x','');
+  document.querySelector('.detail-head').insertAdjacentHTML('afterbegin',`<style>.detail-head::before{background:${c}}</style>`);
+  document.getElementById('back').onclick=()=>{ state.restoreScroll=true; state.view='list'; render(); };
+  document.getElementById('edit').onclick=()=>openForm(sp.id);
+  document.getElementById('del').onclick=async()=>{ if(confirm(`Remove “${sp.name}” from your grimoire?`)){ state.spells=state.spells.filter(s=>s.id!==sp.id); await persist(); state.restoreScroll=true; state.view='list'; render(); } };
+  window.scrollTo(0,0);
+}
+
+/* ---------- add / edit form ---------- */
+function openForm(id){
+  const blank={ id:null, name:'', level:0, school:'Evocation', ct:'Action', rn:'', du:'',
+    concentration:false, ritual:false, prepared:false, alwaysPrepared:false, comps:{v:true,s:false,m:false,cost:''}, material:'', rows:[], desc:'', tags:[] };
+  const src = id ? state.spells.find(s=>s.id===id) : blank;
+  state.editing = JSON.parse(JSON.stringify(src));
+  renderForm();
+}
+function renderForm(){
+  const e=state.editing; if(!e) return;
+  document.getElementById('modal-root')?.remove();
+  const schoolOpts=SCHOOLS.map(s=>`<option ${e.school===s?'selected':''}>${s}</option>`).join('');
+  const levelOpts=['<option value="0">Cantrip</option>'].concat([1,2,3,4,5,6,7,8,9].map(n=>`<option value="${n}" ${e.level==n?'selected':''}>Level ${n}</option>`)).join('');
+  const tagChips=(e.tags||[]).map((t,i)=>`<span class="tag">${esc(t)}<button data-rmtag="${i}">×</button></span>`).join('');
+  const rowsEdit=(e.rows||[]).map((r,i)=>`
+    <div class="row-edit">
+      <input type="text" list="rowkeys" value="${esc(r.k)}" data-rk="${i}" placeholder="EF">
+      <input type="text" value="${esc(r.v)}" data-rv="${i}" placeholder="value">
+      <button class="rm" data-rmrow="${i}">×</button>
+    </div>`).join('');
+  const root=document.createElement('div');
+  root.id='modal-root';
+  root.innerHTML=`
+    <datalist id="rowkeys">${ROW_KEYS.map(k=>`<option value="${k}">`).join('')}</datalist>
+    <div class="scrim" id="scrim">
+      <div class="modal">
+        <h2>${e.id?'Edit spell':'Inscribe a spell'}</h2>
+        <div class="field"><label>Name</label><input type="text" id="f-name" value="${esc(e.name)}" placeholder="Fireball"></div>
+        <div class="grid2">
+          <div class="field"><label>Level</label><select id="f-level">${levelOpts}</select></div>
+          <div class="field"><label>School</label><select id="f-school">${schoolOpts}</select></div>
+        </div>
+        <div class="grid3">
+          <div class="field"><label>Casting time (CT)</label><input type="text" id="f-ct" value="${esc(e.ct)}" placeholder="Action"></div>
+          <div class="field"><label>Range (RN)</label><input type="text" id="f-rn" value="${esc(e.rn)}" placeholder="30 Ft"></div>
+          <div class="field"><label>Duration (DU)</label><input type="text" id="f-du" value="${esc(e.du)}" placeholder="1 Min"></div>
+        </div>
+        <div class="field">
+          <label>Components</label>
+          <div class="comps">
+            <label><input type="checkbox" id="c-v" ${e.comps.v?'checked':''}> Verbal</label>
+            <label><input type="checkbox" id="c-s" ${e.comps.s?'checked':''}> Somatic</label>
+            <label><input type="checkbox" id="c-m" ${e.comps.m?'checked':''}> Material</label>
+            <select id="c-cost" style="padding:6px 8px">
+              <option value="" ${e.comps.cost===''?'selected':''}>no cost</option>
+              <option value="*" ${e.comps.cost==='*'?'selected':''}>* gold cost</option>
+              <option value="**" ${e.comps.cost==='**'?'selected':''}>** consumed</option>
+            </select>
+          </div>
+          <input type="text" id="f-material" value="${esc(e.material)}" placeholder="material (e.g. a firefly)" style="margin-top:8px;width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 11px;font-size:13px">
+        </div>
+        <div class="comps" style="margin-bottom:14px">
+          <label><input type="checkbox" id="f-conc" ${e.concentration?'checked':''}> Concentration ©</label>
+          <label><input type="checkbox" id="f-rit" ${e.ritual?'checked':''}> Ritual ®</label>
+        </div>
+        <div class="comps" style="margin-bottom:14px">
+          <label><input type="checkbox" id="f-prep" ${e.prepared?'checked':''}> Prepared</label>
+          <label><input type="checkbox" id="f-always" ${e.alwaysPrepared?'checked':''}> Always prepared</label>
+        </div>
+        <div class="field">
+          <label>Extra stat rows (Poe keys: TG · AE · MC · LV · DM · SV · HP · EF)</label>
+          <div class="rows-edit" id="rows-edit">${rowsEdit}</div>
+          <button class="add-row" id="add-row">+ add row</button>
+        </div>
+        <div class="field"><label>Notes / description</label><textarea id="f-desc" placeholder="Telegraphic rules text…">${esc(e.desc)}</textarea>
+          <p class="hint">Plain text, or Markdown for rich notes: ## headings, - bullet lists, **bold**, and | pipe | tables |.</p></div>
+        <div class="field"><label>Tags</label>
+          <div class="tagedit" id="tagedit">${tagChips}<input class="tag-input" id="tag-input" placeholder="+ tag ⏎"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="f-cancel">Cancel</button>
+          <div class="right"><button class="btn btn-primary" id="f-save">${e.id?'Save changes':'Add to grimoire'}</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+
+  const sync=()=>{ // pull current DOM into state.editing (preserve unsaved input)
+    e.name=val('f-name'); e.level=+val('f-level'); e.school=val('f-school');
+    e.ct=val('f-ct'); e.rn=val('f-rn'); e.du=val('f-du'); e.material=val('f-material'); e.desc=val('f-desc');
+    e.comps={ v:chk('c-v'), s:chk('c-s'), m:chk('c-m'), cost:val('c-cost') };
+    e.concentration=chk('f-conc'); e.ritual=chk('f-rit');
+    e.prepared=chk('f-prep'); e.alwaysPrepared=chk('f-always');
+    e.rows=(e.rows||[]).map((r,i)=>({ k:val2(`[data-rk="${i}"]`)??r.k, v:val2(`[data-rv="${i}"]`)??r.v }));
+  };
+  const val=id=>document.getElementById(id)?.value||'';
+  const chk=id=>document.getElementById(id)?.checked||false;
+  const val2=sel=>document.querySelector(sel)?.value;
+
+  document.getElementById('add-row').onclick=()=>{ sync(); e.rows.push({k:'',v:''}); renderForm(); };
+  document.querySelectorAll('[data-rmrow]').forEach(b=>b.onclick=()=>{ sync(); e.rows.splice(+b.dataset.rmrow,1); renderForm(); });
+  document.querySelectorAll('[data-rmtag]').forEach(b=>b.onclick=()=>{ sync(); e.tags.splice(+b.dataset.rmtag,1); renderForm(); });
+  const ti=document.getElementById('tag-input');
+  ti.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); const t=ti.value.trim(); if(t){ sync(); e.tags=[...new Set([...(e.tags||[]),t])]; renderForm(); } } };
+  document.getElementById('f-cancel').onclick=()=>{ state.editing=null; document.getElementById('modal-root').remove(); };
+  document.getElementById('scrim').onclick=ev=>{ if(ev.target.id==='scrim'){ state.editing=null; root.remove(); } };
+  document.getElementById('f-save').onclick=async()=>{
+    sync();
+    if(!e.name.trim()){ alert('Give the spell a name first.'); return; }
+    if(e.id){ const i=state.spells.findIndex(s=>s.id===e.id); state.spells[i]=e; }
+    else { e.id=uid(); state.spells.push(e); }
+    await persist();
+    state.editing=null; root.remove();
+    if(state.view==='detail'){ state.currentId=e.id; }
+    render();
+  };
+}
+
+/* ---------- export / import ---------- */
+function openExport(){
+  document.getElementById('modal-root')?.remove();
+  syncActive();
+  const payload = { format:'grimoire-library', version:1, activeId:state.library.activeId, characters:state.library.characters };
+  const json = JSON.stringify(payload, null, 2);
+  const cc = state.library.characters.length;
+  const sc = state.library.characters.reduce((n,c)=>n+c.spells.length,0);
+  const root=document.createElement('div'); root.id='modal-root';
+  root.innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="modal">
+        <h2>Export grimoire</h2>
+        <p class="io-note">Your whole roster — <b>${cc}</b> character${cc===1?'':'s'}, <b>${sc}</b> spell${sc===1?'':'s'} total. Download a <b>.json</b> backup or copy the text — this file is yours, portable, and independent of Claude's storage.</p>
+        <textarea id="io-text" class="io-text" readonly>${esc(json)}</textarea>
+        <div class="modal-actions">
+          <button class="btn" id="io-close">Close</button>
+          <div class="right">
+            <button class="btn" id="io-copy">Copy</button>
+            <button class="btn btn-primary" id="io-download">Download .json</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+  document.getElementById('scrim').onclick=e=>{ if(e.target.id==='scrim') root.remove(); };
+  document.getElementById('io-close').onclick=()=>root.remove();
+  document.getElementById('io-copy').onclick=async(e)=>{
+    const btn=e.currentTarget;
+    let ok=false;
+    try{ await navigator.clipboard.writeText(json); ok=true; }
+    catch(_){ try{ const t=document.getElementById('io-text'); t.focus(); t.select(); ok=document.execCommand('copy'); }catch(__){} }
+    btn.textContent = ok ? 'Copied ✓' : 'Select + copy';
+    if(ok) await markExported();
+    setTimeout(()=>{ btn.textContent='Copy'; }, 1600);
+  };
+  document.getElementById('io-download').onclick=async()=>{
+    try{
+      const blob=new Blob([json],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='grimoire-'+new Date().toISOString().slice(0,10)+'.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      await markExported();
+    }catch(err){ alert('Download was blocked here. Use Copy instead and paste into a new .json file.'); }
+  };
+}
+function openImport(){
+  document.getElementById('modal-root')?.remove();
+  const cc = state.library.characters.length;
+  const root=document.createElement('div'); root.id='modal-root';
+  root.innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="modal">
+        <h2>Import grimoire</h2>
+        <p class="io-note">Choose a <b>.json</b> backup or paste one below, then replace your entire library (currently <b>${cc}</b> character${cc===1?'':'s'}). Accepts a full roster export or an older single-spellbook file. Export first if you want to keep your current library.</p>
+        <input type="file" id="io-file" accept="application/json,.json" class="io-file">
+        <textarea id="io-text" class="io-text" placeholder="…or paste grimoire JSON here"></textarea>
+        <div class="modal-actions">
+          <button class="btn" id="io-close">Cancel</button>
+          <div class="right"><button class="btn btn-primary" id="io-load">Replace library</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+  const ta=document.getElementById('io-text');
+  document.getElementById('io-file').onchange=e=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ ta.value=r.result; };
+    r.onerror=()=>alert('Could not read that file.');
+    r.readAsText(f);
+  };
+  document.getElementById('scrim').onclick=e=>{ if(e.target.id==='scrim') root.remove(); };
+  document.getElementById('io-close').onclick=()=>root.remove();
+  document.getElementById('io-load').onclick=async()=>{
+    let data;
+    try{ data=JSON.parse(ta.value); }
+    catch(err){ alert("That doesn't parse as JSON. Check the text and try again."); return; }
+    const lib = normalizeLibrary(data);
+    if(!lib){ alert("This JSON doesn't look like a grimoire (expected characters or a list of spells)."); return; }
+    if(!lib.activeId || !lib.characters.some(c=>c.id===lib.activeId)) lib.activeId=lib.characters[0].id;
+    const sc = lib.characters.reduce((n,c)=>n+c.spells.length,0);
+    if(!confirm(`Replace your current library with ${lib.characters.length} character(s) / ${sc} spell(s)? This can't be undone.`)) return;
+    state.library = lib;
+    bindActive();
+    lastExportHash = sbHash();               // imported data matches a file → backed up
+    await Store.set(EKEY, lastExportHash);
+    await persist();
+    root.remove();
+    state.view='list'; state.currentId=null; state.editing=null; state.quickTagId=null; state.charMenuOpen=false;
+    state.filter={q:'',school:'',level:'',tag:'',prep:'',ritual:false,cast:'',sort:'level'};
+    render();
+  };
+}
+function normalizeSpell(s){
+  if(!s || typeof s!=='object' || typeof s.name!=='string' || !s.name.trim()) return null;
+  let lvl = Number.isInteger(s.level) ? s.level : parseInt(s.level);
+  if(!Number.isFinite(lvl)) lvl=0;
+  lvl=Math.max(0, Math.min(9, lvl));
+  const c = s.comps && typeof s.comps==='object' ? s.comps : {};
+  return {
+    id: (typeof s.id==='string' && s.id) ? s.id : uid(),
+    name: String(s.name),
+    level: lvl,
+    school: SCHOOLS.includes(s.school) ? s.school : 'Evocation',
+    ct: typeof s.ct==='string' ? s.ct : 'Action',
+    rn: typeof s.rn==='string' ? s.rn : '',
+    du: typeof s.du==='string' ? s.du : '',
+    concentration: !!s.concentration,
+    ritual: !!s.ritual,
+    prepared: !!s.prepared,
+    alwaysPrepared: !!s.alwaysPrepared,
+    comps: { v:!!c.v, s:!!c.s, m:!!c.m, cost: ['','*','**'].includes(c.cost)? c.cost : '' },
+    material: typeof s.material==='string' ? s.material : '',
+    rows: Array.isArray(s.rows) ? s.rows.filter(r=>r&&typeof r==='object').map(r=>({k:String(r.k||''), v:String(r.v||'')})) : [],
+    desc: typeof s.desc==='string' ? s.desc : '',
+    tags: Array.isArray(s.tags) ? s.tags.filter(t=>typeof t==='string') : []
+  };
+}
+function normalizeCharacter(c){
+  if(!c || typeof c!=='object') return { id:uid(), name:null, spells:[], preparedCap:null };
+  const spells = Array.isArray(c.spells) ? c.spells.map(normalizeSpell).filter(Boolean) : [];
+  const name = (typeof c.name==='string' && c.name.trim()) ? c.name.trim() : null;
+  let cap = Number.isFinite(c.preparedCap) ? c.preparedCap : parseInt(c.preparedCap);
+  if(!Number.isFinite(cap) || cap<0) cap=null;
+  return { id: (typeof c.id==='string' && c.id) ? c.id : uid(), name, spells, preparedCap:cap };
+}
+// Accepts a full library export, a single-character object, or a legacy spell array.
+function normalizeLibrary(data){
+  if(data && Array.isArray(data.characters)){
+    const chars = data.characters.map(normalizeCharacter);
+    if(!chars.length) return null;
+    chars.forEach((c,i)=>{ if(!c.name) c.name = 'Character '+(i+1); });
+    const activeId = (typeof data.activeId==='string' && chars.some(c=>c.id===data.activeId)) ? data.activeId : chars[0].id;
+    return { version:1, activeId, characters:chars };
+  }
+  if(data && Array.isArray(data.spells)){
+    const spells = data.spells.map(normalizeSpell).filter(Boolean);
+    const nm = (typeof data.name==='string' && data.name.trim()) ? data.name.trim() : 'Imported';
+    return { version:1, activeId:null, characters:[ {id:uid(), name:nm, spells} ] };
+  }
+  if(Array.isArray(data)){
+    const spells = data.map(normalizeSpell).filter(Boolean);
+    if(!spells.length) return null;
+    return { version:1, activeId:null, characters:[ {id:uid(), name:'Imported', spells} ] };
+  }
+  return null;
+}
+
+/* ---------- character selector UI ---------- */
+function charMenuHTML(){
+  const items = state.library.characters.map(c=>{
+    const on = c.id===state.library.activeId;
+    return `<button class="char-item ${on?'on':''}" data-char="${c.id}"><span class="ci-name">${esc(c.name||'Unnamed')}</span><span class="ci-count">${c.spells.length}</span></button>`;
+  }).join('');
+  return `<div class="char-menu" id="char-menu">
+    <div class="cm-head">Characters</div>
+    ${items}
+    <div class="cm-sep"></div>
+    <button class="cm-act" id="char-new">+ New character</button>
+    <button class="cm-act" id="char-rename">Rename current</button>
+    <button class="cm-act" id="char-dup">Duplicate current</button>
+    <button class="cm-act cm-danger" id="char-delete">Delete current</button>
+  </div>`;
+}
+function wireCharMenu(app){
+  const cs=document.getElementById('char-select');
+  if(cs) cs.onclick=(e)=>{ e.stopPropagation(); state.charMenuOpen=!state.charMenuOpen; renderList(app); };
+  if(state.charMenuOpen){
+    document.querySelectorAll('.char-item').forEach(b=>b.onclick=()=>switchCharacter(b.dataset.char));
+    document.getElementById('char-new').onclick=()=>{ state.charMenuOpen=false; openNameModal('new'); };
+    document.getElementById('char-rename').onclick=()=>{ state.charMenuOpen=false; openNameModal('rename'); };
+    document.getElementById('char-dup').onclick=()=>duplicateActive();
+    document.getElementById('char-delete').onclick=()=>deleteActive();
+  }
+}
+function globalClose(ev){
+  if(!state.charMenuOpen) return;
+  const menu=document.getElementById('char-menu');
+  const sel=document.getElementById('char-select');
+  if(menu && !menu.contains(ev.target) && (!sel || !sel.contains(ev.target))){
+    state.charMenuOpen=false;
+    if(state.view==='list') renderList(document.getElementById('app'));
+  }
+}
+function openCapModal(){
+  document.getElementById('modal-root')?.remove();
+  const ac=activeChar();
+  const cur = Number.isFinite(ac.preparedCap) ? ac.preparedCap : '';
+  const prepCount = state.spells.filter(s=>s.prepared).length;
+  const root=document.createElement('div'); root.id='modal-root';
+  root.innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="modal modal-narrow">
+        <h2>Prepared spell limit</h2>
+        <p class="io-note">Set how many spells “${esc(ac.name||'this character')}” can prepare. Always-prepared spells don't count toward this. Currently <b>${prepCount}</b> prepared. Leave blank for no limit.</p>
+        <div class="field"><label>Prepared limit</label><input type="number" id="cap-input" min="0" step="1" value="${cur}" placeholder="e.g. 7" autocomplete="off"></div>
+        <div class="modal-actions">
+          <button class="btn" id="cap-clear">No limit</button>
+          <div class="right"><button class="btn btn-primary" id="cap-save">Save</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+  const inp=document.getElementById('cap-input'); inp.focus();
+  document.getElementById('scrim').onclick=e=>{ if(e.target.id==='scrim') root.remove(); };
+  const save=async(clear)=>{
+    let v = clear ? null : parseInt(inp.value);
+    if(!clear && (!Number.isFinite(v) || v<0)) v=null;
+    activeChar().preparedCap = v;
+    root.remove(); await persist(); render();
+  };
+  document.getElementById('cap-save').onclick=()=>save(false);
+  document.getElementById('cap-clear').onclick=()=>save(true);
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); save(false); } else if(e.key==='Escape'){ root.remove(); } };
+}
+function openNameModal(mode){
+  document.getElementById('modal-root')?.remove();
+  const ac=activeChar();
+  const cur = mode==='rename' ? (ac.name||'') : '';
+  const titles={ first:'Name your first character', new:'New character', rename:'Rename character' };
+  const ctas={ first:'Save name', new:'Create character', rename:'Save name' };
+  const intro = mode==='first'
+    ? `<p class="io-note">Your spellbook is now a character in your grimoire. Give this one a name — you can add more characters and switch between them anytime.</p>`
+    : mode==='new' ? `<p class="io-note">Creates a fresh, empty spellbook you can switch to.</p>` : '';
+  const root=document.createElement('div'); root.id='modal-root';
+  root.innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="modal modal-narrow">
+        <h2>${titles[mode]}</h2>
+        ${intro}
+        <div class="field"><label>Character name</label><input type="text" id="name-input" value="${esc(cur)}" placeholder="e.g. Thistlewick the Bold" autocomplete="off" spellcheck="false"></div>
+        <div class="modal-actions">
+          ${mode==='first' ? '<span></span>' : '<button class="btn" id="name-cancel">Cancel</button>'}
+          <div class="right"><button class="btn btn-primary" id="name-save">${ctas[mode]}</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+  const inp=document.getElementById('name-input'); inp.focus();
+  const cancel=document.getElementById('name-cancel');
+  if(cancel) cancel.onclick=()=>root.remove();
+  document.getElementById('scrim').onclick=e=>{ if(e.target.id==='scrim' && mode!=='first') root.remove(); };
+  const save=async()=>{
+    const nm=inp.value.trim();
+    if(mode==='rename'){ root.remove(); if(nm) await renameActive(nm); return; }
+    if(mode==='new'){ if(!nm){ inp.style.borderColor='var(--danger)'; inp.focus(); return; } root.remove(); await addCharacter(nm); return; }
+    root.remove(); await renameActive(nm || 'My Character');   // first-run
+  };
+  document.getElementById('name-save').onclick=save;
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); save(); } else if(e.key==='Escape' && mode!=='first'){ root.remove(); } };
+}
+
+load();
+</script>
